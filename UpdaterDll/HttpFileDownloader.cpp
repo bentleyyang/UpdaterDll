@@ -23,6 +23,7 @@ void HttpFileDownloader::downloadFile()
 		std::string mime = objHttpRes.getContentType();
 		//TODO:重定向
 		//if (objHttpRes.getStatus() == Poco::Net::HTTPResponse::HTTPStatus::HTTP_NOT_FOUND) {}
+		if (objHttpRes.getStatus() != Poco::Net::HTTPResponse::HTTPStatus::HTTP_OK) { throw std::logic_error("file not found"); }
 		std::streamsize fileSize = objHttpRes.getContentLength();
 		if (fileSize == Poco::Net::HTTPMessage::UNKNOWN_CONTENT_LENGTH) {
 			throw Poco::ProtocolException(objUri.toString());
@@ -38,12 +39,14 @@ void HttpFileDownloader::downloadFile()
 
 		Timer timer;
 		if (m_onDownloadProgress) {
-			timer.StartTimer(50, [&]() {m_onDownloadProgress(std::min<uint64_t>(fileSize - leftSize, fileSize), fileSize); });
+			timer.StartTimer(500, [&]() {m_onDownloadProgress(std::min<uint64_t>(fileSize - leftSize, fileSize), fileSize); });
 		}
 
 		while (leftSize-- > 0) {
 			int dat = objHttpResIs.get();
-			if (objHttpResIs.fail()) { throw std::logic_error("objHttpResIs.get() faild"); }
+			if (objHttpResIs.fail()) { 
+				throw std::logic_error("objHttpResIs.get() faild"); 
+			}
 			fs.put(dat);
 			if (fs.fail()) { throw std::logic_error("write file faild"); }
 			//if (m_onDownloadProgress) { m_onDownloadProgress(fileSize - leftSize, fileSize); }
@@ -58,6 +61,11 @@ void HttpFileDownloader::downloadFile()
 
 }
 
+void HttpFileDownloader::cancelDownload()
+{
+	objHttpCliSess.reset();
+}
+
 bool HttpFileDownloader::obtainFileSize(uint64_t& dst)
 {
 	try {
@@ -66,6 +74,7 @@ bool HttpFileDownloader::obtainFileSize(uint64_t& dst)
 		std::string mime = objHttpRes.getContentType();
 		//重定向
 		//if (objHttpRes.getStatus() == Poco::Net::HTTPResponse::HTTPStatus::HTTP_NOT_FOUND) {}
+		if (objHttpRes.getStatus() != Poco::Net::HTTPResponse::HTTPStatus::HTTP_OK) { return false; }
 		std::streamsize fileSize = objHttpRes.getContentLength();
 		if (fileSize == Poco::Net::HTTPMessage::UNKNOWN_CONTENT_LENGTH) {
 			return false;

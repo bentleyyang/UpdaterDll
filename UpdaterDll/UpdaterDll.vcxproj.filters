@@ -33,6 +33,21 @@
     <ClInclude Include="File.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Path.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="HttpFileDownloader.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="FileVersion.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Setting.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="UpdateProcess.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -51,6 +66,21 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="File.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Path.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="HttpFileDownloader.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="FileVersion.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Setting.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="UpdateProcess.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

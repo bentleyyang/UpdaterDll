@@ -34,6 +34,7 @@ public:
 	void setOnDownloadProgress(OnDownloadProgress fn) { m_onDownloadProgress = fn; }
 	bool obtainFileSize(uint64_t& dst);
 	void downloadFile();
+	void cancelDownload();
 
 	
 

@@ -1,32 +1,6 @@
 #include "pch.h"
 #include "UpdateInfoFile.h"
 
-#include "File.h"
-
-#include "convert.hpp"
-
-const std::array<const char*, 19> UpdateInfoFile::DefaultPathConstants = 
-{
-	"%app%",
-	"%approot%",
-	"%updater%",
-	"%updatertemp%",
-	"%temp%",
-	"%programfiles%",
-	"%system%",
-	"%appdata%",
-	"%userprofile%",
-	"%commonappdata%",
-	"%quicklaunchcurrentuser%",
-	"%menustartcurrentuser%",
-	"%desktopcurrentuser%",
-	"%quicklaunchallusers%",
-	"%menustartallusers%",
-	"%desktopallusers%",
-	"%windowsdirectory%",
-	"%updateserverpath%",
-	"%updateserverfile%",
-};
 
 UpdateInfoFile::UpdateInfoFile()
 {
@@ -35,6 +9,39 @@ UpdateInfoFile::UpdateInfoFile()
 
 UpdateInfoFile::~UpdateInfoFile()
 {
+}
+
+bool UpdateInfoFile::parseConstants(Poco::XML::Node * pNode, std::map<std::string, std::wstring>& info)
+{
+	using namespace Poco;
+	using namespace Poco::XML;
+
+	info.clear();
+	try {
+		AutoPtr<NodeList> list = static_cast<Element*>(pNode)->getElementsByTagName("CONSTANT");
+		for (int i = 0; i < list->length(); i++)
+		{
+			Element *constant = (Element*)list->item(i);
+			std::string constantName;
+			std::wstring constantVal;
+
+			Attr *attr;
+			std::string val;
+			attr = constant->getAttributeNode("name");
+			val = attr->value();
+			constantName = val;
+
+			attr = constant->getAttributeNode("value");
+			val = attr->value();
+			constantVal = to_wstr(val);
+
+			info.insert({ constantName, constantVal });
+		}
+	}
+	catch (std::exception& err) {
+		return false;
+	}
+	return true;
 }
 
 bool UpdateInfoFile::parseGeneral(Poco::XML::Node* pNode, GeneralInfo& info)
@@ -72,8 +79,8 @@ bool UpdateInfoFile::parseGeneral(Poco::XML::Node* pNode, GeneralInfo& info)
 		nodeVal = pChildNode->getNodeValue();
 		info.resumDownload = strToBoolean(nodeVal);
 
-		pChildNode = pNode->getNodeByPath("/LICENSE")->firstChild();
-		info.license = pChildNode->getNodeValue();
+		pChildNode = pNode->getNodeByPath("/LICENSE");
+		if (pChildNode && pChildNode->firstChild()) { info.license = pChildNode->firstChild()->nodeValue(); }
 
 		pChildNode = pNode->getNodeByPath("/FORCEUPDATE")->firstChild();
 		nodeVal = pChildNode->getNodeValue();
@@ -91,6 +98,8 @@ bool UpdateInfoFile::parseFiles(Poco::XML::Node * pNode, std::vector<FileInfo> &
 	using namespace Poco;
 	using namespace Poco::XML;
 
+	info.clear();
+
 	try {
 		AutoPtr<NodeList> list = static_cast<Element*>(pNode)->getElementsByTagName("FILE");
 		for (int i = 0; i < list->length(); i++)
@@ -102,7 +111,7 @@ bool UpdateInfoFile::parseFiles(Poco::XML::Node * pNode, std::vector<FileInfo> &
 			std::string val;
 			attr = file->getAttributeNode("name");
 			val = attr->value();
-			fileInfo.m_name = val;
+			fileInfo.m_name = replaceConstants(val);
 
 
 			attr = file->getAttributeNode("location");
@@ -117,7 +126,7 @@ bool UpdateInfoFile::parseFiles(Poco::XML::Node * pNode, std::vector<FileInfo> &
 				{
 					attr = file->getAttributeNode("version");
 					val = attr->value();
-					fileInfo.m_version = val;
+					fileInfo.m_version = replaceConstants(val);
 				}
 				else if (checkType == FileInfo::CHECK_TYPE_HASH)
 				{
@@ -134,7 +143,7 @@ bool UpdateInfoFile::parseFiles(Poco::XML::Node * pNode, std::vector<FileInfo> &
 			}
 
 			attr = file->getAttributeNode("section");
-			if (attr) { val = attr->value(); fileInfo.m_section = val; }
+			if (attr) { val = attr->value(); fileInfo.m_section = replaceConstants(val); }
 
 			//±éÀú
 			//auto attrs= file->attributes();
@@ -170,6 +179,7 @@ bool UpdateInfoFile::parseActions(Poco::XML::Node* pNode, std::vector<std::share
 			std::string val;
 			{
 				attr = elem->getAttributeNode("type");
+				if (!attr) { return false; }
 				std::string type = attr->value();
 				if (type=="copy")
 				{
@@ -187,6 +197,27 @@ bool UpdateInfoFile::parseActions(Poco::XML::Node* pNode, std::vector<std::share
 					std::string src = replaceConstants(location->firstChild()->nodeValue());
 					action = std::make_shared<ActionDownload>(to_wstr(src));
 				}
+				else if (type == "delete")
+				{
+					Element *location = elem->getChildElement("LOCATION");
+					std::string src = replaceConstants(location->firstChild()->nodeValue());
+
+					Element *askUser = elem->getChildElement("ASKUSER");
+					bool bAskUser = strToBoolean(askUser->firstChild()->nodeValue());
+					action = std::make_shared<ActionDelete>(to_wstr(src), bAskUser);
+				}
+				else if (type == "run")
+				{
+					Element *location = elem->getChildElement("LOCATION");
+					std::string src = replaceConstants(location->firstChild()->nodeValue());
+
+					Element *elemParameters = elem->getChildElement("PARAMETERS");
+					std::string parameters = elemParameters->firstChild()->nodeValue();
+
+					Element *elemWait = elem->getChildElement("WAIT");
+					bool bWait = strToBoolean(elemWait->firstChild()->nodeValue());
+					action = std::make_shared<ActionExecute>(to_wstr(src), to_wstr(parameters), bWait);
+				}
 			}
 
 			if (!action) { return false; }
@@ -199,3 +230,47 @@ bool UpdateInfoFile::parseActions(Poco::XML::Node* pNode, std::vector<std::share
 	}
 	return true;
 }
+
+bool UpdateInfoFile::parseInis(Poco::XML::Node * pNode, std::vector<IniItem>& info)
+{
+	using namespace Poco;
+	using namespace Poco::XML;
+
+	info.clear();
+
+	try {
+		AutoPtr<NodeList> list = static_cast<Element*>(pNode)->getElementsByTagName("ITEM");
+		for (int i = 0; i < list->length(); i++)
+		{
+			Element *elemIniItem = (Element*)list->item(i);
+
+			IniItem iniItem;
+
+			Element *e_location = elemIniItem->getChildElement("LOCATION");
+			Element *e_group = elemIniItem->getChildElement("GROUP");
+			Element *e_key = elemIniItem->getChildElement("KEY");
+			Element *e_value = elemIniItem->getChildElement("VALUE");
+
+			if(!e_location||!e_location->firstChild()
+				|| !e_group || !e_group->firstChild()
+				|| !e_key || !e_key->firstChild()
+				|| !e_value || !e_value->firstChild()
+				) 
+			{
+				return false;
+			}
+
+			iniItem.location = replaceConstants(e_location->firstChild()->nodeValue());
+			iniItem.group = e_group->firstChild()->nodeValue();
+			iniItem.key = e_key->firstChild()->nodeValue();
+			iniItem.value = replaceConstants(e_value->firstChild()->nodeValue());
+
+			info.push_back(iniItem);
+		}
+	}
+	catch (std::exception& err) {
+		return false;
+	}
+	return true;
+}
+

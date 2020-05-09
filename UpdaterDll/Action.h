@@ -34,6 +34,8 @@ public:
 		return true;
 	}
 
+	std::wstring getUrl() { return m_url; }
+
 private:
 	std::wstring m_url;
 };
